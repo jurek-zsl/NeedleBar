@@ -1,0 +1,15 @@
+.DS_Store
+.build/
+DerivedData/
+*.xcodeproj
+*.xcworkspace
+*.cact
+*.dylib
+*.a
+*.whl
+*.app
+.swiftpm/
+xcuserdata/
+*.log
+.env
+.env.local

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleExecutable</key>
+    <string>NeedleBarApp</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.needlebar.NeedleBar</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>NeedleBar</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>14.0</string>
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>NeedleBar requires Apple Events permission to interact with Apple Notes and system applications.</string>
+    <key>NSRemindersUsageDescription</key>
+    <string>NeedleBar requires access to Apple Reminders to schedule and manage reminders.</string>
+    <key>NSCalendarsUsageDescription</key>
+    <string>NeedleBar requires access to Apple Calendar to schedule events.</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+</dict>
+</plist>
