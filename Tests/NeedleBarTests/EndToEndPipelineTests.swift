@@ -135,4 +135,168 @@ final class EndToEndPipelineTests: XCTestCase {
         XCTAssertNil(appState.confirmationPlan)
         XCTAssertNil(appState.activeResult)
     }
+
+    func testStartTimerCommandExtractsFiveMinutesAndExecutes() async {
+        await appState.submitCommand("start timer 5 min")
+
+        XCTAssertNil(appState.errorMessage)
+        XCTAssertNil(appState.confirmationPlan, "Timer is safe action, should execute automatically")
+        XCTAssertNotNil(appState.activeResult)
+        XCTAssertTrue(appState.activeResult?.success == true)
+        XCTAssertEqual(mockProductivity.startedTimers.count, 1)
+        XCTAssertEqual(mockProductivity.startedTimers.first?.durationSeconds, 300)
+
+        // Ensure it did NOT create a reminder
+        XCTAssertEqual(mockProductivity.createdReminders.count, 0)
+
+        // Check history
+        let record = appState.recentHistory.first
+        XCTAssertEqual(record?.toolNames, ["start_timer"])
+        XCTAssertTrue(record?.summary.contains("5-minute timer") == true)
+    }
+
+    func testStartTimerCommandPreservesSeconds() async {
+        await appState.submitCommand("start timer 30 seconds")
+
+        XCTAssertNil(appState.errorMessage)
+        XCTAssertEqual(mockProductivity.startedTimers.first?.durationSeconds, 30)
+        XCTAssertTrue(appState.activeResult?.summary.contains("30-second timer") == true)
+    }
+
+    func testCreateReminderCommandEndToEnd() async {
+        await appState.submitCommand("remind me to buy groceries")
+
+        XCTAssertNil(appState.errorMessage)
+        XCTAssertNotNil(appState.confirmationPlan, "Reminder creates persistent data, requires confirmation")
+
+        await appState.confirmPlan()
+        XCTAssertEqual(mockProductivity.createdReminders.count, 1)
+        XCTAssertEqual(mockProductivity.startedTimers.count, 0)
+    }
+
+    func testChainedCommandWithAfterExecutesInCorrectOrder() async {
+        await appState.submitCommand("start timer 5 min after opening Safari")
+
+        XCTAssertNil(appState.errorMessage)
+        XCTAssertNotNil(appState.activeResult)
+        XCTAssertTrue(appState.activeResult?.success == true)
+
+        // Verifies Safari was opened first, then timer started
+        XCTAssertEqual(mockWorkspace.openedApps, ["Safari"])
+        XCTAssertEqual(mockProductivity.startedTimers.count, 1)
+        XCTAssertEqual(mockProductivity.startedTimers.first?.durationSeconds, 300)
+
+        let steps = appState.currentPlan?.steps ?? []
+        XCTAssertEqual(steps.count, 2)
+        XCTAssertEqual(steps[0].toolCall.name, "open_application")
+        XCTAssertEqual(steps[1].toolCall.name, "start_timer")
+    }
+
+    func testChainedCommandWithAndThenExecutesInOrder() async {
+        await appState.submitCommand("open Safari and then start timer 5 min")
+
+        XCTAssertNil(appState.errorMessage)
+        XCTAssertNotNil(appState.activeResult)
+        XCTAssertTrue(appState.activeResult?.success == true)
+
+        XCTAssertEqual(mockWorkspace.openedApps, ["Safari"])
+        XCTAssertEqual(mockProductivity.startedTimers.count, 1)
+
+        let steps = appState.currentPlan?.steps ?? []
+        XCTAssertEqual(steps.count, 2)
+        XCTAssertEqual(steps[0].toolCall.name, "open_application")
+        XCTAssertEqual(steps[1].toolCall.name, "start_timer")
+    }
+
+    func testLowConfidencePresentsConfirmationPlanInsteadOfDropping() async {
+        let lowConfClient = MockNeedleClient(simulatedConfidence: 0.40) // Low confidence below 0.50
+        let lowConfAppState = AppState(
+            needleClient: lowConfClient,
+            toolRegistry: appState.toolRegistry,
+            historyStore: appState.historyStore,
+            preferencesStore: appState.preferencesStore,
+            permissionManager: appState.permissionManager
+        )
+
+        await lowConfAppState.submitCommand("open Safari")
+
+        // Should NOT throw an unhandled error or drop the command
+        XCTAssertNil(lowConfAppState.errorMessage)
+        // Should require confirmation because of low confidence
+        XCTAssertNotNil(lowConfAppState.confirmationPlan)
+        XCTAssertEqual(lowConfAppState.confirmationPlan?.steps.count, 1)
+        XCTAssertEqual(lowConfAppState.confirmationPlan?.steps.first?.toolCall.name, "open_application")
+
+        // Confirming should execute the plan
+        await lowConfAppState.confirmPlan()
+        XCTAssertEqual(mockWorkspace.openedApps, ["Safari"])
+    }
+
+    func testFastPathOpenURL() async {
+        await appState.submitCommand("open google.com")
+
+        XCTAssertNil(appState.errorMessage)
+        XCTAssertNil(appState.confirmationPlan)
+        XCTAssertNotNil(appState.activeResult)
+        XCTAssertTrue(appState.activeResult?.success == true)
+        XCTAssertEqual(mockWorkspace.openedURLs.count, 1)
+        XCTAssertEqual(mockWorkspace.openedURLs.first?.absoluteString, "https://google.com")
+    }
+
+    func testFastPathOpenURLWithBrowserName() async {
+        await appState.submitCommand("open youtube.com in Safari")
+
+        XCTAssertNil(appState.errorMessage)
+        XCTAssertNil(appState.confirmationPlan)
+        XCTAssertNotNil(appState.activeResult)
+        XCTAssertTrue(appState.activeResult?.success == true)
+        XCTAssertEqual(mockWorkspace.openedURLs.count, 1)
+        XCTAssertEqual(mockWorkspace.openedURLs.first?.absoluteString, "https://youtube.com")
+    }
+
+    func testFastPathOpenFolder() async {
+        await appState.submitCommand("open downloads")
+
+        XCTAssertNil(appState.errorMessage)
+        XCTAssertNil(appState.confirmationPlan)
+        XCTAssertNotNil(appState.activeResult)
+        XCTAssertTrue(appState.activeResult?.success == true)
+        XCTAssertEqual(mockWorkspace.openedFolders.count, 1)
+        XCTAssertTrue(mockWorkspace.openedFolders.first?.path.contains("Downloads") == true)
+    }
+
+    func testFastPathBatteryStatus() async {
+        await appState.submitCommand("what is my battery status")
+
+        XCTAssertNil(appState.errorMessage)
+        XCTAssertNil(appState.confirmationPlan)
+        XCTAssertNotNil(appState.activeResult)
+        XCTAssertTrue(appState.activeResult?.success == true)
+        XCTAssertTrue(appState.activeResult?.summary.contains("Battery") == true)
+    }
+
+    func testHealedCommandExecutionEndToEnd() async {
+        // Simulate engine returning open_application("apple.com")
+        await mockClient.setCustomResponse(
+            for: "browse apple.com",
+            response: NeedleResponse(
+                type: "call",
+                success: true,
+                functionCalls: [
+                    ToolCall(name: "open_application", arguments: ["name": AnyCodable("apple.com")])
+                ],
+                confidence: 0.90
+            )
+        )
+
+        await appState.submitCommand("browse apple.com")
+
+        XCTAssertNil(appState.errorMessage)
+        XCTAssertNil(appState.confirmationPlan)
+        XCTAssertNotNil(appState.activeResult)
+        XCTAssertTrue(appState.activeResult?.success == true)
+        // Should have healed to open_url
+        XCTAssertEqual(mockWorkspace.openedURLs.count, 1)
+        XCTAssertEqual(mockWorkspace.openedURLs.first?.absoluteString, "https://apple.com")
+    }
 }

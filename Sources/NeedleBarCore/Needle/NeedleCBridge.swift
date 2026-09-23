@@ -277,6 +277,19 @@ public final class NeedleCBridge: NeedleClientProtocol, @unchecked Sendable {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd EEE HH:mm"
         let dateStr = f.string(from: Date())
-        return "date: \(dateStr); locale: en-US; device: mac"
+        return """
+        date: \(dateStr); locale: en-US; device: mac.
+        Guidelines:
+        - Use open_url for websites, URLs, domains ending in .com, .org, .net, .io, or starting with http.
+        - Use open_folder for folder paths or common directories like Downloads, Documents, Desktop.
+        - Use open_application only for installed application names like Safari, Terminal, Xcode.
+        - Use start_timer for countdown timers and focus sessions.
+        - Use create_reminder for to-dos, tasks, and reminders.
+        - Use create_calendar_event for scheduled calendar events and meetings.
+        - Use get_battery_status for battery or charging queries.
+        - Use get_system_summary for system specs, RAM, uptime, or OS version.
+        - Use search_files for finding files on disk.
+        - Use search_notes for searching inside Apple Notes.
+        """
     }
 }

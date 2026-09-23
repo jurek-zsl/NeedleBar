@@ -38,6 +38,45 @@ public final class DefaultWorkspaceService: WorkspaceServiceProtocol, @unchecked
                 running.activate()
                 return
             }
+
+            // Safety Fallback 1: If argument is an obvious URL
+            let lowerName = appName.lowercased()
+            if lowerName.hasPrefix("http://") || lowerName.hasPrefix("https://") ||
+               lowerName.hasPrefix("www.") ||
+               [".com", ".org", ".net", ".io", ".app", ".dev", ".edu", ".co", ".ai"].contains(where: { lowerName.hasSuffix($0) }) {
+                var urlString = appName
+                if !urlString.lowercased().hasPrefix("http://") && !urlString.lowercased().hasPrefix("https://") {
+                    urlString = "https://" + urlString
+                }
+                if let url = URL(string: urlString) {
+                    try await openURL(url)
+                    return
+                }
+            }
+
+            // Safety Fallback 2: If argument is an obvious user folder
+            let folderMap: [String: String] = [
+                "downloads": NSHomeDirectory() + "/Downloads",
+                "documents": NSHomeDirectory() + "/Documents",
+                "desktop": NSHomeDirectory() + "/Desktop",
+                "movies": NSHomeDirectory() + "/Movies",
+                "music": NSHomeDirectory() + "/Music",
+                "pictures": NSHomeDirectory() + "/Pictures"
+            ]
+            if let folderPath = folderMap[lowerName] {
+                let url = URL(fileURLWithPath: folderPath)
+                try await openFolder(at: url)
+                return
+            }
+            if lowerName.hasPrefix("~/") || lowerName.hasPrefix("/") {
+                let expanded = (appName as NSString).expandingTildeInPath
+                var isDir: ObjCBool = false
+                if FileManager.default.fileExists(atPath: expanded, isDirectory: &isDir), isDir.boolValue {
+                    try await openFolder(at: URL(fileURLWithPath: expanded))
+                    return
+                }
+            }
+
             throw NSError(domain: "NeedleBar", code: 404, userInfo: [
                 NSLocalizedDescriptionKey: "Application '\(appName)' could not be found in standard application directories."
             ])
@@ -167,22 +206,16 @@ public final class DefaultFileSystemService: FileSystemServiceProtocol, @uncheck
 
 public final class DefaultProductivityService: ProductivityServiceProtocol, @unchecked Sendable {
     private let eventStore = EKEventStore()
+    private let clockTimerService: any ClockTimerServiceProtocol
 
-    public init() {}
+    public init() {
+        self.clockTimerService = MacOSClockTimerService()
+    }
 
-    public func startTimer(minutes: Int, label: String?) async throws {
-        guard minutes > 0 else {
-            throw NSError(domain: "NeedleBar", code: 400, userInfo: [
-                NSLocalizedDescriptionKey: "Timer duration must be greater than 0 minutes."
-            ])
-        }
-        let title = label ?? "\(minutes)-Minute Timer"
-        let scriptText = """
-        display notification "\(title) has started." with title "NeedleBar Timer" subtitle "Duration: \(minutes) min" sound name "Glass"
-        """
-        if let script = NSAppleScript(source: scriptText) {
-            var error: NSDictionary?
-            script.executeAndReturnError(&error)
+    public func startTimer(durationSeconds: Int, label: String?) async throws {
+        try await clockTimerService.startTimer(durationSeconds: durationSeconds, label: label)
+        await MainActor.run {
+            ActiveTimerTracker.shared.startCountdown(durationSeconds: durationSeconds, label: label)
         }
     }
 
@@ -231,7 +264,7 @@ public final class DefaultProductivityService: ProductivityServiceProtocol, @unc
     public func createCalendarEvent(title: String, start: Date, end: Date, location: String?) async throws {
         let granted: Bool
         if #available(macOS 14.0, *) {
-            granted = try await eventStore.requestFullAccessToEvents()
+            granted = try await eventStore.requestWriteOnlyAccessToEvents()
         } else {
             granted = try await withCheckedThrowingContinuation { continuation in
                 eventStore.requestAccess(to: .event) { allowed, error in

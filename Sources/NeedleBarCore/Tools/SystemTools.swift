@@ -11,7 +11,8 @@ public struct GetBatteryStatusTool: ToolProtocol {
         ToolDefinition(
             name: "get_battery_status",
             description: "Get macOS battery percentage, power source, and charging state.",
-            parameters: ParametersSchema()
+            parameters: ParametersSchema(),
+            triggers: ["\\b(battery|power|charge|percentage)\\b"]
         )
     }
 

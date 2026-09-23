@@ -43,7 +43,12 @@ public final class ToolRegistry: @unchecked Sendable {
         productivityService: ProductivityServiceProtocol = DefaultProductivityService(),
         systemInfoService: SystemInfoServiceProtocol = DefaultSystemInfoService(),
         notesService: NotesServiceProtocol = DefaultNotesService(),
-        historySearch: (@Sendable (String) async -> [HistoryRecord])? = nil
+        clipboardService: ClipboardService = .shared,
+        contextService: ContextServiceProtocol = DefaultContextService(),
+        documentIndexer: LocalDocumentIndexer = .shared,
+        historySearch: (@Sendable (String) async -> [HistoryRecord])? = nil,
+        customToolsDirectory: URL? = nil,
+        onPresentHelp: (@Sendable () -> Void)? = nil
     ) -> ToolRegistry {
         let registry = ToolRegistry()
 
@@ -73,6 +78,41 @@ public final class ToolRegistry: @unchecked Sendable {
         // Search Tools (2)
         registry.register(tool: SearchNotesTool(notesService: notesService))
         registry.register(tool: SearchCommandHistoryTool(searchCallback: historySearch))
+
+        // Shortcuts & Automation (1)
+        registry.register(tool: RunShortcutTool())
+
+        // Media & Volume (2)
+        registry.register(tool: MediaControlTool())
+        registry.register(tool: SetVolumeTool())
+
+        // Window Management (1)
+        registry.register(tool: WindowManagementTool())
+
+        // System Toggles & Controls (4)
+        registry.register(tool: ToggleDarkModeTool())
+        registry.register(tool: LockScreenTool())
+        registry.register(tool: EmptyTrashTool())
+        registry.register(tool: ToggleDNDTool())
+
+        // Clipboard Tools (2)
+        registry.register(tool: GetClipboardHistoryTool(clipboardService: clipboardService))
+        registry.register(tool: CopyToClipboardTool(clipboardService: clipboardService))
+
+        // Context-Aware & Selection Tools (2)
+        registry.register(tool: GetActiveContextTool(contextService: contextService))
+        registry.register(tool: PreviewFileTool())
+
+        // Document RAG (1)
+        registry.register(tool: SearchLocalDocumentsTool(indexer: documentIndexer))
+
+        // Help & Command Documentation (1)
+        registry.register(tool: HelpTool(onPresentHelp: onPresentHelp))
+
+        // Custom User Scripts (~/.config/needlebar/tools/*.json)
+        for customTool in CustomScriptToolLoader.shared.loadTools(from: customToolsDirectory) {
+            registry.register(tool: customTool)
+        }
 
         return registry
     }

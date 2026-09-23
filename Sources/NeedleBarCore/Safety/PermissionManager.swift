@@ -1,44 +1,55 @@
-import Foundation
 import AppKit
+import ApplicationServices
+import CoreServices
 import EventKit
+import Foundation
 
 public enum PermissionType: String, CaseIterable, Codable, Sendable {
+    case accessibility
     case reminders
     case calendar
-    case filesAndFolders
-    case automation
+    case notesAutomation
 
     public var title: String {
         switch self {
-        case .reminders: return "Reminders Access"
-        case .calendar: return "Calendar Access"
-        case .filesAndFolders: return "Files & Folders"
-        case .automation: return "Automation & AppleScript"
+        case .accessibility: return "Control Clock"
+        case .reminders: return "Create reminders"
+        case .calendar: return "Create calendar events"
+        case .notesAutomation: return "Search Apple Notes"
         }
     }
 
     public var reasonDescription: String {
         switch self {
+        case .accessibility:
+            return "Used only to enter and start timers in the macOS Clock app."
         case .reminders:
-            return "NeedleBar needs Reminders access so you can create reminders and to-do items with natural language."
+            return "Used only when you ask NeedleBar to add an item to Reminders."
         case .calendar:
-            return "NeedleBar needs Calendar access so you can schedule meetings and events directly."
-        case .filesAndFolders:
-            return "NeedleBar needs file access to search, organize, and reveal documents in your selected folders."
-        case .automation:
-            return "NeedleBar uses Apple Events to interact with native macOS applications like Apple Notes and System Settings."
+            return "Used only when you ask NeedleBar to create a Calendar event."
+        case .notesAutomation:
+            return "Used only to search note titles and contents in Apple Notes."
+        }
+    }
+
+    public var systemImage: String {
+        switch self {
+        case .accessibility: return "timer"
+        case .reminders: return "checklist"
+        case .calendar: return "calendar"
+        case .notesAutomation: return "note.text"
         }
     }
 
     public var settingsURL: URL? {
         switch self {
+        case .accessibility:
+            return URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
         case .reminders:
             return URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Reminders")
         case .calendar:
             return URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars")
-        case .filesAndFolders:
-            return URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders")
-        case .automation:
+        case .notesAutomation:
             return URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")
         }
     }
@@ -49,80 +60,136 @@ public enum PermissionStatus: String, Codable, Sendable {
     case authorized
     case denied
     case restricted
+
+    public var isAuthorized: Bool { self == .authorized }
 }
 
 public final class PermissionManager: @unchecked Sendable {
     public static let shared = PermissionManager()
-    private let eventStore = EKEventStore()
 
-    public init() {}
+    private enum DefaultsKey {
+        static let accessibilityRequestAttempted = "NeedleBar.permission.accessibility.requestAttempted"
+        static let notesRequestAttempted = "NeedleBar.permission.notes.requestAttempted"
+        static let notesWasAuthorized = "NeedleBar.permission.notes.wasAuthorized"
+    }
+
+    private static let notesBundleIdentifier = "com.apple.Notes"
+
+    private let eventStore: EKEventStore
+    private let defaults: UserDefaults
+
+    public init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        self.eventStore = EKEventStore()
+    }
 
     public func status(for permission: PermissionType) -> PermissionStatus {
         switch permission {
+        case .accessibility:
+            if AXIsProcessTrusted() { return .authorized }
+            return defaults.bool(forKey: DefaultsKey.accessibilityRequestAttempted) ? .denied : .notDetermined
+
         case .reminders:
-            let ekStatus = EKEventStore.authorizationStatus(for: .reminder)
-            return mapEKStatus(ekStatus)
+            return mapEKStatus(EKEventStore.authorizationStatus(for: .reminder))
+
         case .calendar:
-            let ekStatus = EKEventStore.authorizationStatus(for: .event)
-            return mapEKStatus(ekStatus)
-        case .filesAndFolders:
-            // Standard user folders are readable by default unless restricted by sandbox
-            return .authorized
-        case .automation:
-            return .authorized
+            return mapEKStatus(EKEventStore.authorizationStatus(for: .event))
+
+        case .notesAutomation:
+            return notesAutomationStatus(askUserIfNeeded: false)
         }
     }
 
+    /// Requests access using the native API for the selected capability.
     public func requestPermission(for permission: PermissionType) async -> Bool {
         switch permission {
+        case .accessibility:
+            defaults.set(true, forKey: DefaultsKey.accessibilityRequestAttempted)
+            let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
+            _ = AXIsProcessTrustedWithOptions(options)
+            try? await Task.sleep(for: .milliseconds(350))
+            return AXIsProcessTrusted()
+
         case .reminders:
             do {
-                if #available(macOS 14.0, *) {
-                    return try await eventStore.requestFullAccessToReminders()
-                } else {
-                    return try await withCheckedThrowingContinuation { continuation in
-                        eventStore.requestAccess(to: .reminder) { granted, error in
-                            if let error = error {
-                                continuation.resume(throwing: error)
-                            } else {
-                                continuation.resume(returning: granted)
-                            }
-                        }
-                    }
-                }
+                return try await eventStore.requestFullAccessToReminders()
             } catch {
                 return false
             }
 
         case .calendar:
             do {
-                if #available(macOS 14.0, *) {
-                    return try await eventStore.requestFullAccessToEvents()
-                } else {
-                    return try await withCheckedThrowingContinuation { continuation in
-                        eventStore.requestAccess(to: .event) { granted, error in
-                            if let error = error {
-                                continuation.resume(throwing: error)
-                            } else {
-                                continuation.resume(returning: granted)
-                            }
-                        }
-                    }
-                }
+                return try await eventStore.requestWriteOnlyAccessToEvents()
             } catch {
                 return false
             }
 
-        case .filesAndFolders, .automation:
-            return true
+        case .notesAutomation:
+            return await requestNotesAutomationPermission()
         }
     }
 
     public func openSystemSettings(for permission: PermissionType) {
-        if let url = permission.settingsURL {
-            NSWorkspace.shared.open(url)
-        } else if let generalPrivacy = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy") {
-            NSWorkspace.shared.open(generalPrivacy)
+        guard let url = permission.settingsURL else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    private func requestNotesAutomationPermission() async -> Bool {
+        defaults.set(true, forKey: DefaultsKey.notesRequestAttempted)
+
+        if NSWorkspace.shared.runningApplications.contains(where: {
+            $0.bundleIdentifier == Self.notesBundleIdentifier
+        }) == false,
+           let notesURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: Self.notesBundleIdentifier) {
+            let configuration = NSWorkspace.OpenConfiguration()
+            configuration.activates = false
+            _ = try? await NSWorkspace.shared.openApplication(at: notesURL, configuration: configuration)
+        }
+
+        let granted = notesAutomationStatus(askUserIfNeeded: true) == .authorized
+        defaults.set(granted, forKey: DefaultsKey.notesWasAuthorized)
+        return granted
+    }
+
+    private func notesAutomationStatus(askUserIfNeeded: Bool) -> PermissionStatus {
+        guard NSWorkspace.shared.runningApplications.contains(where: {
+            $0.bundleIdentifier == Self.notesBundleIdentifier
+        }) else {
+            if defaults.bool(forKey: DefaultsKey.notesWasAuthorized) {
+                return .authorized
+            }
+            return defaults.bool(forKey: DefaultsKey.notesRequestAttempted) ? .denied : .notDetermined
+        }
+
+        var target = AEAddressDesc()
+        let bundleIdentifier = Self.notesBundleIdentifier
+        let createStatus = bundleIdentifier.withCString { pointer in
+            AECreateDesc(
+                typeApplicationBundleID,
+                pointer,
+                bundleIdentifier.lengthOfBytes(using: .utf8),
+                &target
+            )
+        }
+        guard createStatus == noErr else { return .restricted }
+        defer { AEDisposeDesc(&target) }
+
+        let result = AEDeterminePermissionToAutomateTarget(
+            &target,
+            typeWildCard,
+            typeWildCard,
+            askUserIfNeeded
+        )
+
+        switch result {
+        case noErr:
+            return .authorized
+        case OSStatus(errAEEventWouldRequireUserConsent):
+            return .notDetermined
+        case OSStatus(errAEEventNotPermitted):
+            return .denied
+        default:
+            return .restricted
         }
     }
 

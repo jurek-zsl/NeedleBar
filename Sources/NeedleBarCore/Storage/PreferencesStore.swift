@@ -51,7 +51,7 @@ public final class PreferencesStore: @unchecked Sendable {
         get {
             lock.lock()
             defer { lock.unlock() }
-            return defaults.string(forKey: Keys.globalShortcut) ?? "⌥Space"
+            return defaults.string(forKey: Keys.globalShortcut) ?? "⌘Escape"
         }
         set {
             lock.lock()

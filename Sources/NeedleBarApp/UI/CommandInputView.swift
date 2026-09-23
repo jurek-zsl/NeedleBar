@@ -38,7 +38,7 @@ public struct CommandInputView: View {
             if appState.isProcessing {
                 ProgressView()
                     .controlSize(.small)
-            } else {
+            } else if appState.confirmationPlan == nil {
                 Button(action: submit) {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.system(size: 20))
@@ -47,6 +47,14 @@ public struct CommandInputView: View {
                 .buttonStyle(.plain)
                 .disabled(appState.inputQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 .keyboardShortcut(.defaultAction)
+            } else {
+                Button(action: submit) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(.green)
+                }
+                .buttonStyle(.plain)
+                .help("Confirm & Execute")
             }
         }
         .padding(10)
@@ -62,6 +70,12 @@ public struct CommandInputView: View {
     }
 
     private func submit() {
+        if appState.confirmationPlan != nil {
+            Task {
+                await appState.confirmPlan()
+            }
+            return
+        }
         Task {
             await appState.submitCommand()
         }

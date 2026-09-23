@@ -23,11 +23,11 @@
     <key>LSUIElement</key>
     <true/>
     <key>NSAppleEventsUsageDescription</key>
-    <string>NeedleBar requires Apple Events permission to interact with Apple Notes and system applications.</string>
-    <key>NSRemindersUsageDescription</key>
-    <string>NeedleBar requires access to Apple Reminders to schedule and manage reminders.</string>
-    <key>NSCalendarsUsageDescription</key>
-    <string>NeedleBar requires access to Apple Calendar to schedule events.</string>
+    <string>NeedleBar uses Apple Events to search Apple Notes only when you ask it to search your notes.</string>
+    <key>NSRemindersFullAccessUsageDescription</key>
+    <string>NeedleBar needs Reminders access only when you ask it to create a reminder.</string>
+    <key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+    <string>NeedleBar needs Calendar access only when you ask it to create an event.</string>
     <key>NSHighResolutionCapable</key>
     <true/>
 </dict>

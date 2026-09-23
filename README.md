@@ -117,7 +117,7 @@ NeedleBar includes 17 native automation tools:
 | **Files** | `create_folder(path)` | Create a new folder on disk | Safe |
 | **Files** | `move_file(source, destination)` | Move a file to a new location | Confirmation |
 | **Files** | `rename_file(path, new_name)` | Rename a file or directory | Confirmation |
-| **Productivity** | `start_timer(minutes, label?)` | Start a focus countdown timer | Safe |
+| **Productivity** | `start_timer(minutes?, seconds?, label?)` | Start a timer in the macOS Clock app | Safe |
 | **Productivity** | `create_reminder(title, due_date?)` | Schedule a task in Apple Reminders | Confirmation |
 | **Productivity** | `create_calendar_event(title, start, end?, location?)` | Create an event in Apple Calendar | Confirmation |
 | **System** | `get_battery_status()` | Query battery level and charging state | Safe |

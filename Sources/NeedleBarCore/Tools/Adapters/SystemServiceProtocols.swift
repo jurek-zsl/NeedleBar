@@ -19,7 +19,7 @@ public protocol FileSystemServiceProtocol: Sendable {
 }
 
 public protocol ProductivityServiceProtocol: Sendable {
-    func startTimer(minutes: Int, label: String?) async throws
+    func startTimer(durationSeconds: Int, label: String?) async throws
     func createReminder(title: String, dueDate: Date?) async throws
     func createCalendarEvent(title: String, start: Date, end: Date, location: String?) async throws
 }

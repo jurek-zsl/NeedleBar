@@ -6,7 +6,13 @@ public actor MockNeedleClient: NeedleClientProtocol {
     public var shouldThrowError: Error?
     public var isInitialized: Bool = false
 
-    public init() {}
+    public init(simulatedConfidence: Double = 0.95) {
+        self.simulatedConfidence = simulatedConfidence
+    }
+
+    public func setSimulatedConfidence(_ conf: Double) {
+        self.simulatedConfidence = conf
+    }
 
     public func setCustomResponse(for query: String, response: NeedleResponse) {
         customResponses[query.lowercased()] = response
@@ -51,6 +57,30 @@ public actor MockNeedleClient: NeedleClientProtocol {
             )
         }
 
+        if lower.contains("safari") && (lower.contains("timer") || lower.contains("countdown") || lower.contains("focus")) {
+            let minutes = 5
+            let calls: [ToolCall]
+            if lower.contains("after") && lower.hasPrefix("start timer") {
+                // "start timer 5 min after opening Safari" -> open Safari first, then timer
+                calls = [
+                    ToolCall(name: "open_application", arguments: ["name": AnyCodable("Safari")]),
+                    ToolCall(name: "start_timer", arguments: ["minutes": AnyCodable(minutes), "label": AnyCodable("Focus session")])
+                ]
+            } else {
+                calls = [
+                    ToolCall(name: "open_application", arguments: ["name": AnyCodable("Safari")]),
+                    ToolCall(name: "start_timer", arguments: ["minutes": AnyCodable(minutes), "label": AnyCodable("Focus session")])
+                ]
+            }
+            return NeedleResponse(
+                type: "call",
+                success: true,
+                functionCalls: calls,
+                reasoning: "Open Safari and start timer for \(minutes) minutes",
+                confidence: simulatedConfidence
+            )
+        }
+
         if lower.contains("safari") {
             return NeedleResponse(
                 type: "call",
@@ -63,8 +93,39 @@ public actor MockNeedleClient: NeedleClientProtocol {
             )
         }
 
-        if lower.contains("focus session") || lower.contains("timer") {
-            let minutes = lower.contains("25") ? 25 : 15
+        if lower.contains("focus session") || lower.contains("timer") || lower.contains("countdown") || lower.contains("stopwatch") {
+            let secondsPattern = #"(\d+)\s*(?:sec|second|seconds|s\b)"#
+            if let regex = try? NSRegularExpression(pattern: secondsPattern),
+               let match = regex.firstMatch(in: lower, range: NSRange(lower.startIndex..., in: lower)),
+               let range = Range(match.range(at: 1), in: lower),
+               let seconds = Int(lower[range]), seconds > 0 {
+                return NeedleResponse(
+                    type: "call",
+                    success: true,
+                    functionCalls: [
+                        ToolCall(name: "start_timer", arguments: [
+                            "seconds": AnyCodable(seconds),
+                            "label": AnyCodable("Focus session")
+                        ])
+                    ],
+                    reasoning: "Start focus timer for \(seconds) seconds",
+                    confidence: simulatedConfidence
+                )
+            }
+
+            var minutes = 15
+            let pattern = #"(\d+)\s*(?:min|minute|minutes|m\b)?"#
+            if let regex = try? NSRegularExpression(pattern: pattern),
+               let match = regex.firstMatch(in: lower, range: NSRange(lower.startIndex..., in: lower)),
+               let range = Range(match.range(at: 1), in: lower),
+               let parsed = Int(lower[range]), parsed > 0 {
+                minutes = parsed
+            } else if lower.contains("25") {
+                minutes = 25
+            } else if lower.contains("5") {
+                minutes = 5
+            }
+
             return NeedleResponse(
                 type: "call",
                 success: true,
@@ -118,17 +179,23 @@ public actor MockNeedleClient: NeedleClientProtocol {
             )
         }
 
-        if lower.contains("reminder") {
+        if (lower.contains("reminder") || lower.contains("remind") || lower.contains("todo")) && !lower.contains("timer") {
+            let title = lower.replacingOccurrences(of: "create reminder", with: "")
+                .replacingOccurrences(of: "reminder", with: "")
+                .replacingOccurrences(of: "remind me to", with: "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let finalTitle = title.isEmpty ? "Call Alex" : title.capitalized
+
             return NeedleResponse(
                 type: "call",
                 success: true,
                 functionCalls: [
                     ToolCall(name: "create_reminder", arguments: [
-                        "title": AnyCodable("Call Alex"),
+                        "title": AnyCodable(finalTitle),
                         "due_date": AnyCodable("tomorrow")
                     ])
                 ],
-                reasoning: "Create reminder to call Alex tomorrow",
+                reasoning: "Create reminder: '\(finalTitle)'",
                 confidence: simulatedConfidence
             )
         }

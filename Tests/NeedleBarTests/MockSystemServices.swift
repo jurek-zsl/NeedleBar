@@ -89,16 +89,16 @@ public final class MockFileSystemService: FileSystemServiceProtocol, @unchecked 
 }
 
 public final class MockProductivityService: ProductivityServiceProtocol, @unchecked Sendable {
-    public var startedTimers: [(minutes: Int, label: String?)] = []
+    public var startedTimers: [(durationSeconds: Int, label: String?)] = []
     public var createdReminders: [(title: String, dueDate: Date?)] = []
     public var createdEvents: [(title: String, start: Date, end: Date, location: String?)] = []
     public var shouldThrowError: Error?
 
     public init() {}
 
-    public func startTimer(minutes: Int, label: String?) async throws {
+    public func startTimer(durationSeconds: Int, label: String?) async throws {
         if let err = shouldThrowError { throw err }
-        startedTimers.append((minutes, label))
+        startedTimers.append((durationSeconds, label))
     }
 
     public func createReminder(title: String, dueDate: Date?) async throws {

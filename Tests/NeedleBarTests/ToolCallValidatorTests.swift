@@ -144,4 +144,90 @@ final class ToolCallValidatorTests: XCTestCase {
         XCTAssertEqual(plan.status, .awaitingConfirmation)
         XCTAssertEqual(plan.steps[0].affectedItems.count, 2)
     }
+
+    func testHealOpenApplicationURLToOpenURL() throws {
+        let response = NeedleResponse(
+            type: "call",
+            success: true,
+            functionCalls: [
+                ToolCall(name: "open_application", arguments: ["name": AnyCodable("google.com")])
+            ],
+            confidence: 0.90
+        )
+
+        let plan = try validator.validateAndBuildPlan(query: "open google.com", response: response)
+        XCTAssertEqual(plan.steps.count, 1)
+        XCTAssertEqual(plan.steps[0].toolCall.name, "open_url")
+        XCTAssertEqual(plan.steps[0].toolCall.string(for: "url"), "https://google.com")
+    }
+
+    func testHealOpenApplicationFolderToOpenFolder() throws {
+        let response = NeedleResponse(
+            type: "call",
+            success: true,
+            functionCalls: [
+                ToolCall(name: "open_application", arguments: ["name": AnyCodable("downloads")])
+            ],
+            confidence: 0.88
+        )
+
+        let plan = try validator.validateAndBuildPlan(query: "open downloads", response: response)
+        XCTAssertEqual(plan.steps.count, 1)
+        XCTAssertEqual(plan.steps[0].toolCall.name, "open_folder")
+        XCTAssertEqual(plan.steps[0].toolCall.string(for: "path"), "~/Downloads")
+    }
+
+    func testHealOpenApplicationTimerToStartTimer() throws {
+        let response = NeedleResponse(
+            type: "call",
+            success: true,
+            functionCalls: [
+                ToolCall(name: "open_application", arguments: ["name": AnyCodable("timer")])
+            ],
+            confidence: 0.85
+        )
+
+        let plan = try validator.validateAndBuildPlan(query: "start timer 5 min", response: response)
+        XCTAssertEqual(plan.steps.count, 1)
+        XCTAssertEqual(plan.steps[0].toolCall.name, "start_timer")
+        XCTAssertEqual(plan.steps[0].toolCall.int(for: "minutes"), 5)
+    }
+
+    func testHealCalendarEventSearchToSearchFiles() throws {
+        let response = NeedleResponse(
+            type: "call",
+            success: true,
+            functionCalls: [
+                ToolCall(name: "create_calendar_event", arguments: ["title": AnyCodable("Invoice.pdf")])
+            ],
+            confidence: 0.85
+        )
+
+        let plan = try validator.validateAndBuildPlan(query: "find invoice.pdf", response: response)
+        XCTAssertEqual(plan.steps.count, 1)
+        XCTAssertEqual(plan.steps[0].toolCall.name, "search_files")
+        XCTAssertEqual(plan.steps[0].toolCall.string(for: "query"), "invoice.pdf")
+    }
+
+    func testConfidenceFloorRejectsLowConfidenceHallucinationsEvenWithAllowFlag() {
+        let response = NeedleResponse(
+            type: "call",
+            success: true,
+            functionCalls: [
+                ToolCall(name: "create_calendar_event", arguments: ["title": AnyCodable("Music")])
+            ],
+            confidence: 0.18
+        )
+
+        // Even when allowLowConfidenceWithConfirmation is true, confidence < 0.40 must throw lowConfidence
+        XCTAssertThrowsError(try validator.validateAndBuildPlan(
+            query: "music",
+            response: response,
+            allowLowConfidenceWithConfirmation: true
+        )) { error in
+            guard case ValidationError.lowConfidence = error else {
+                return XCTFail("Expected lowConfidence error, got \(error)")
+            }
+        }
+    }
 }

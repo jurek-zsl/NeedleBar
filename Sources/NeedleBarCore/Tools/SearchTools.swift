@@ -21,7 +21,7 @@ public struct SearchNotesTool: ToolProtocol {
     }
 
     public var riskLevel: RiskLevel { .safe }
-    public var requiredPermission: PermissionType? { .automation }
+    public var requiredPermission: PermissionType? { .notesAutomation }
 
     public func execute(arguments: [String: AnyCodable]) async throws -> ToolResult {
         guard let query = arguments["query"]?.stringValue, !query.isEmpty else {

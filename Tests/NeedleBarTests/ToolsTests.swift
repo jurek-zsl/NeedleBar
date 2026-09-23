@@ -131,12 +131,24 @@ final class ToolsTests: XCTestCase {
             "label": AnyCodable("Focus session")
         ])
         XCTAssertTrue(result.success)
-        XCTAssertEqual(productivity.startedTimers.first?.minutes, 25)
+        XCTAssertEqual(productivity.startedTimers.first?.durationSeconds, 1_500)
         XCTAssertEqual(productivity.startedTimers.first?.label, "Focus session")
 
         // Test invalid minutes
         let badResult = try await tool.execute(arguments: ["minutes": AnyCodable(-5)])
         XCTAssertFalse(badResult.success)
+    }
+
+    func testStartTimerToolPreservesSeconds() async throws {
+        let tool = StartTimerTool(productivityService: productivity)
+        let result = try await tool.execute(arguments: [
+            "minutes": AnyCodable(1),
+            "seconds": AnyCodable(30)
+        ])
+
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(productivity.startedTimers.first?.durationSeconds, 90)
+        XCTAssertTrue(result.message.contains("1 minute 30 seconds"))
     }
 
     func testCreateReminderTool() async throws {

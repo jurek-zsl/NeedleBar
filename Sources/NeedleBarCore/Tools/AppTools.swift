@@ -10,13 +10,14 @@ public struct OpenApplicationTool: ToolProtocol {
     public var definition: ToolDefinition {
         ToolDefinition(
             name: "open_application",
-            description: "Open an installed macOS application by name.",
+            description: "Open an installed macOS application by application name (e.g. Safari, Xcode, Terminal). Do NOT use for websites, web links, or folder paths.",
             parameters: ParametersSchema(
                 properties: [
                     "name": PropertyDefinition(type: "string", description: "Name of the application, e.g. Safari, Xcode")
                 ],
                 required: ["name"]
-            )
+            ),
+            triggers: ["\\b(open app|launch app|open application|open)\\b"]
         )
     }
 
@@ -47,7 +48,8 @@ public struct QuitApplicationTool: ToolProtocol {
                     "name": PropertyDefinition(type: "string", description: "Name of the application to quit")
                 ],
                 required: ["name"]
-            )
+            ),
+            triggers: ["\\b(quit|close|terminate|kill)\\b"]
         )
     }
 
@@ -72,13 +74,14 @@ public struct OpenURLTool: ToolProtocol {
     public var definition: ToolDefinition {
         ToolDefinition(
             name: "open_url",
-            description: "Open a web URL in the default web browser.",
+            description: "Open a web URL or domain in the default web browser (e.g. https://apple.com, google.com).",
             parameters: ParametersSchema(
                 properties: [
                     "url": PropertyDefinition(type: "string", description: "Full URL to open, e.g. https://apple.com")
                 ],
                 required: ["url"]
-            )
+            ),
+            triggers: ["\\b(open url|open website|open link|browse|http|https|\\.com|\\.org|\\.net)\\b"]
         )
     }
 
@@ -114,13 +117,14 @@ public struct OpenFolderTool: ToolProtocol {
     public var definition: ToolDefinition {
         ToolDefinition(
             name: "open_folder",
-            description: "Reveal and open a directory in Finder.",
+            description: "Reveal and open a directory or folder in Finder (e.g. ~/Downloads, ~/Documents, ~/Desktop).",
             parameters: ParametersSchema(
                 properties: [
                     "path": PropertyDefinition(type: "string", description: "Directory path to reveal, e.g. ~/Documents")
                 ],
                 required: ["path"]
-            )
+            ),
+            triggers: ["\\b(open folder|open directory|reveal folder|show in finder|downloads|documents|desktop)\\b"]
         )
     }
 

@@ -1,9 +1,31 @@
 import Foundation
 import AppKit
+import Carbon
+
+private let _hotkeyLock = NSLock()
+nonisolated(unsafe) private var _globalHotkeyCallback: (@Sendable () -> Void)?
+
+private func _carbonHotkeyHandler(
+    nextHandler: EventHandlerCallRef?,
+    event: EventRef?,
+    userData: UnsafeMutableRawPointer?
+) -> OSStatus {
+    _hotkeyLock.lock()
+    let callback = _globalHotkeyCallback
+    _hotkeyLock.unlock()
+
+    if let callback = callback {
+        DispatchQueue.main.async {
+            callback()
+        }
+    }
+    return noErr
+}
 
 public final class GlobalHotkeyMonitor: @unchecked Sendable {
+    private var hotKeyRef: EventHotKeyRef?
+    private var eventHandlerRef: EventHandlerRef?
     private var localMonitor: Any?
-    private var globalMonitor: Any?
     private let onTrigger: @Sendable () -> Void
 
     public init(onTrigger: @escaping @Sendable () -> Void) {
@@ -13,41 +35,77 @@ public final class GlobalHotkeyMonitor: @unchecked Sendable {
     public func start() {
         stop()
 
-        // Local monitor when application is active
+        _hotkeyLock.lock()
+        _globalHotkeyCallback = onTrigger
+        _hotkeyLock.unlock()
+
+        // 1. Install Carbon Event Handler (Works globally without Accessibility permissions)
+        var eventType = EventTypeSpec(
+            eventClass: OSType(kEventClassKeyboard),
+            eventKind: UInt32(kEventHotKeyPressed)
+        )
+
+        InstallEventHandler(
+            GetApplicationEventTarget(),
+            _carbonHotkeyHandler,
+            1,
+            &eventType,
+            nil,
+            &eventHandlerRef
+        )
+
+        // 2. Register unique shortcut: ⌃⌥N (Control + Option + N)
+        // kVK_ANSI_N is key code 45 ('N' for NeedleBar)
+        let hotKeyID = EventHotKeyID(signature: OSType(0x4E424152), id: 1) // 'NBAR'
+        let carbonModifiers = UInt32(controlKey | optionKey)
+        RegisterEventHotKey(
+            UInt32(kVK_ANSI_N),
+            carbonModifiers,
+            hotKeyID,
+            GetApplicationEventTarget(),
+            0,
+            &hotKeyRef
+        )
+
+        // 3. Local monitor when NeedleBar is active (for Escape or Command+Escape)
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if self?.matchesHotkey(event) == true {
+            if self?.matchesLocalHotkey(event) == true {
                 self?.onTrigger()
                 return nil
             }
             return event
         }
-
-        // Global monitor when other applications are active
-        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if self?.matchesHotkey(event) == true {
-                self?.onTrigger()
-            }
-        }
     }
 
     public func stop() {
+        if let hotKey = hotKeyRef {
+            UnregisterEventHotKey(hotKey)
+            hotKeyRef = nil
+        }
+        if let handler = eventHandlerRef {
+            RemoveEventHandler(handler)
+            eventHandlerRef = nil
+        }
         if let local = localMonitor {
             NSEvent.removeMonitor(local)
             localMonitor = nil
         }
-        if let global = globalMonitor {
-            NSEvent.removeMonitor(global)
-            globalMonitor = nil
-        }
+
+        _hotkeyLock.lock()
+        _globalHotkeyCallback = nil
+        _hotkeyLock.unlock()
     }
 
     deinit {
         stop()
     }
 
-    private func matchesHotkey(_ event: NSEvent) -> Bool {
-        // Default hotkey: Option + Space (keyCode 49 with option modifier)
+    private func matchesLocalHotkey(_ event: NSEvent) -> Bool {
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        return flags.contains(.option) && event.keyCode == 49
+        // Control + Option + N
+        let isCtrlOptN = flags.contains(.control) && flags.contains(.option) && event.keyCode == 45
+        // Command + Escape
+        let isCommandEscape = flags.contains(.command) && event.keyCode == 53
+        return isCtrlOptN || isCommandEscape
     }
 }

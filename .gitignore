@@ -13,3 +13,5 @@ xcuserdata/
 *.log
 .env
 .env.local
+SKILL.md
+references/

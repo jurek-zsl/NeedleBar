@@ -10,27 +10,55 @@ public struct StartTimerTool: ToolProtocol {
     public var definition: ToolDefinition {
         ToolDefinition(
             name: "start_timer",
-            description: "Start a countdown focus timer for a specified number of minutes.",
+            description: "Start a countdown timer or focus timer. Use for timers, countdowns, and focus sessions.",
             parameters: ParametersSchema(
                 properties: [
-                    "minutes": PropertyDefinition(type: "integer", description: "Duration in minutes"),
+                    "minutes": PropertyDefinition(type: "integer", description: "Whole minutes in the duration."),
+                    "seconds": PropertyDefinition(type: "integer", description: "Seconds in the duration. Can be used alone or with minutes."),
                     "label": PropertyDefinition(type: "string", description: "Optional description or label for the timer")
                 ],
-                required: ["minutes"]
-            )
+                required: []
+            ),
+            triggers: ["\\b(timer|countdown|stopwatch|focus session)\\b"]
         )
     }
 
     public var riskLevel: RiskLevel { .safe }
+    public var requiredPermission: PermissionType? { .accessibility }
 
     public func execute(arguments: [String: AnyCodable]) async throws -> ToolResult {
-        guard let minutes = arguments["minutes"]?.intValue, minutes > 0 else {
-            return .failure(tool: definition.name, error: "Missing or invalid 'minutes' parameter.")
+        let hasExplicitDuration = arguments["minutes"] != nil || arguments["seconds"] != nil
+        let minutes = arguments["minutes"]?.intValue ?? (hasExplicitDuration ? 0 : 15)
+        let seconds = arguments["seconds"]?.intValue ?? 0
+
+        guard minutes >= 0, seconds >= 0 else {
+            return .failure(tool: definition.name, error: "Timer duration cannot be negative.")
         }
+
+        let (minuteSeconds, overflowed) = minutes.multipliedReportingOverflow(by: 60)
+        guard !overflowed else {
+            return .failure(tool: definition.name, error: ClockTimerError.invalidDuration.localizedDescription)
+        }
+        let (durationSeconds, additionOverflowed) = minuteSeconds.addingReportingOverflow(seconds)
+        guard !additionOverflowed,
+              let duration = try? TimerDuration(totalSeconds: durationSeconds) else {
+            return .failure(tool: definition.name, error: ClockTimerError.invalidDuration.localizedDescription)
+        }
+
         let label = arguments["label"]?.stringValue
-        try await productivityService.startTimer(minutes: minutes, label: label)
+        try await productivityService.startTimer(durationSeconds: duration.totalSeconds, label: label)
         let labelText = label != nil ? " ('\(label!)')" : ""
-        return .success(tool: definition.name, message: "Started \(minutes)-minute timer\(labelText).")
+        let timerText: String
+        if duration.seconds == 0, duration.hours == 0 {
+            timerText = "\(duration.minutes)-minute timer"
+        } else if duration.seconds == 0, duration.minutes == 0 {
+            timerText = "\(duration.hours)-hour timer"
+        } else if duration.hours == 0, duration.minutes == 0 {
+            timerText = "\(duration.seconds)-second timer"
+        } else {
+            timerText = "timer for \(duration.displayText)"
+        }
+        return .success(tool: definition.name, message: "Started \(timerText)\(labelText) in Clock.")
     }
 }
 
@@ -44,14 +72,15 @@ public struct CreateReminderTool: ToolProtocol {
     public var definition: ToolDefinition {
         ToolDefinition(
             name: "create_reminder",
-            description: "Create a reminder in Apple Reminders.",
+            description: "Create a reminder or task in Apple Reminders. Do NOT use for countdown timers or focus timers (use start_timer instead).",
             parameters: ParametersSchema(
                 properties: [
                     "title": PropertyDefinition(type: "string", description: "Title or content of the reminder"),
                     "due_date": PropertyDefinition(type: "string", description: "Optional due date or time string, e.g. tomorrow, 2026-09-23")
                 ],
                 required: ["title"]
-            )
+            ),
+            triggers: ["\\b(remind|reminder|to-do|todo)\\b"]
         )
     }
 

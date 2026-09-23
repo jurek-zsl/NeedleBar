@@ -37,6 +37,21 @@ public struct CommandPopoverView: View {
                 .controlSize(.small)
 
                 Button(action: {
+                    if appState.isHelpPresented {
+                        appState.dismissHelp()
+                    } else {
+                        appState.selectedTab = .command
+                        appState.presentHelp()
+                    }
+                }) {
+                    Image(systemName: "questionmark.circle")
+                        .font(.system(size: 13))
+                        .foregroundColor(appState.isHelpPresented ? .accentColor : .secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Help & Command Examples")
+
+                Button(action: {
                     NSApplication.shared.terminate(nil)
                 }) {
                     Image(systemName: "power")
@@ -107,8 +122,13 @@ public struct CommandPopoverView: View {
         VStack(spacing: 12) {
             CommandInputView(appState: appState)
 
+            // Help View
+            if appState.isHelpPresented {
+                HelpCatalogView(appState: appState)
+            }
+
             // Quick Suggestions when idle
-            if appState.currentPlan == nil && appState.confirmationPlan == nil && !appState.isProcessing {
+            if !appState.isHelpPresented && appState.currentPlan == nil && appState.confirmationPlan == nil && !appState.isProcessing {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("QUICK SUGGESTIONS")
                         .font(.system(size: 10, weight: .semibold))
@@ -116,6 +136,7 @@ public struct CommandPopoverView: View {
 
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 6) {
+                            suggestionButton("help")
                             suggestionButton("Open Safari")
                             suggestionButton("Start 25m focus session")
                             suggestionButton("What is my battery status?")
@@ -173,12 +194,18 @@ public struct CommandPopoverView: View {
                 await appState.submitCommand(title)
             }
         }) {
-            Text(title)
-                .font(.system(size: 11))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color(NSColor.controlBackgroundColor))
-                .cornerRadius(6)
+            HStack(spacing: 4) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 9))
+                    .foregroundColor(.secondary)
+                Text(title)
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 5)
+            .background(Capsule().fill(Color.primary.opacity(0.06)))
+            .overlay(Capsule().stroke(Color.primary.opacity(0.12), lineWidth: 0.8))
+            .clipShape(Capsule())
         }
         .buttonStyle(.plain)
     }

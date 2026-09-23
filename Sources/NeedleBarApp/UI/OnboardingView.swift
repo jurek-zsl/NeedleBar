@@ -30,38 +30,64 @@ public struct OnboardingView: View {
             Spacer()
 
             // Navigation bar
-            HStack {
-                if step > 1 {
-                    Button("Back") {
-                        step -= 1
+            AdaptiveGlassContainer(spacing: 8) {
+                HStack {
+                    if step > 1 {
+                        if #available(macOS 26, iOS 26, *) {
+                            Button("Back") {
+                                step -= 1
+                            }
+                            .buttonStyle(.glass)
+                            .controlSize(.small)
+                        } else {
+                            Button("Back") {
+                                step -= 1
+                            }
+                            .controlSize(.small)
+                        }
                     }
-                    .controlSize(.small)
-                }
 
-                Spacer()
+                    Spacer()
 
-                HStack(spacing: 4) {
-                    ForEach(1...4, id: \.self) { i in
-                        Circle()
-                            .fill(i == step ? Color.accentColor : Color.secondary.opacity(0.3))
-                            .frame(width: 6, height: 6)
+                    HStack(spacing: 4) {
+                        ForEach(1...4, id: \.self) { i in
+                            Circle()
+                                .fill(i == step ? Color.accentColor : Color.secondary.opacity(0.3))
+                                .frame(width: 6, height: 6)
+                        }
                     }
-                }
 
-                Spacer()
+                    Spacer()
 
-                if step < 4 {
-                    Button("Next") {
-                        step += 1
+                    if step < 4 {
+                        if #available(macOS 26, iOS 26, *) {
+                            Button("Next") {
+                                step += 1
+                            }
+                            .buttonStyle(.glassProminent)
+                            .controlSize(.small)
+                        } else {
+                            Button("Next") {
+                                step += 1
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
+                        }
+                    } else {
+                        if #available(macOS 26, iOS 26, *) {
+                            Button("Get Started") {
+                                appState.dismissOnboarding()
+                            }
+                            .buttonStyle(.glassProminent)
+                            .controlSize(.small)
+                        } else {
+                            Button("Get Started") {
+                                appState.dismissOnboarding()
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
+                        }
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                } else {
-                    Button("Get Started") {
-                        appState.dismissOnboarding()
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
                 }
             }
             .padding(.top, 8)
@@ -132,15 +158,27 @@ public struct OnboardingView: View {
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
 
-            Button(action: runQuickTest) {
-                if isTesting {
-                    ProgressView().controlSize(.small)
-                } else {
-                    Text("Run 'What is my battery status?'")
+            if #available(macOS 26, iOS 26, *) {
+                Button(action: runQuickTest) {
+                    if isTesting {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Text("Run 'What is my battery status?'")
+                    }
                 }
+                .buttonStyle(.glass)
+                .disabled(isTesting)
+            } else {
+                Button(action: runQuickTest) {
+                    if isTesting {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Text("Run 'What is my battery status?'")
+                    }
+                }
+                .buttonStyle(.bordered)
+                .disabled(isTesting)
             }
-            .buttonStyle(.bordered)
-            .disabled(isTesting)
 
             if let out = testOutput {
                 Text(out)
