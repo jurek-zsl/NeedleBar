@@ -2,7 +2,7 @@
 
 **NeedleBar** is a private, local-first macOS menu-bar automation assistant powered by the [Needle 3](https://github.com/cactus-compute/needle) foundation model.
 
-Open NeedleBar from the menu bar or with a global keyboard shortcut (`⌥Space`), type natural-language instructions, and Needle 3 converts your commands into structured, grammar-constrained tool calls. NeedleBar then validates the parameters, performs multi-tier risk analysis, prompts for confirmation when necessary, and executes safe macOS actions via native Swift APIs, AppKit, EventKit, and AppleScript.
+Open NeedleBar from the menu bar or with a global keyboard shortcut (`⌥Space`), type natural-language instructions, and Needle 3 converts your commands into structured, grammar-constrained tool calls with validation, risk classification, and native macOS execution.
 
 ```text
 User Command: "Open Xcode and Terminal"
@@ -27,7 +27,7 @@ Live UI Feedback & Local Vector History Indexing
 - **100% Local & Private**: All inference and embeddings run on-device using the official `needle3.cact` (34 MB) model. No cloud LLMs, no remote API calls, no prompt uploads.
 - **Sub-Millisecond In-Process Bridge**: Swift communicates directly with the compiled C runtime (`libneedle3.dylib`) via `dlopen`/`dlsym`, generating tool calls at >2,000 tokens/sec.
 - **Grammar-Guaranteed Output**: Uses Needle 3's token-level grammar constraint to eliminate JSON formatting hallucinations.
-- **Multi-Tier Safety Model**: Safe read-only and launch actions execute automatically; file moves, renames, app quits, calendar events, and reminders require explicit user confirmation with a full parameter breakdown.
+- **Multi-Tier Safety Model**: Safe read-only and launch actions execute automatically; file moves, renames, app quits, calendar events, and reminders require explicit user confirmation with a full execution preview.
 - **Local Semantic Search**: Indexes past commands and files using Needle 3's 3,072-dimensional vector embeddings with cosine similarity matching and deterministic keyword fallback.
 - **Native SwiftUI Menu-Bar Experience**: Built with SwiftUI `MenuBarExtra`, keyboard-first shortcuts, dark/light mode support, and accessibility.
 
@@ -230,3 +230,293 @@ To add a new tool to NeedleBar:
 - **No Cloud Inference**: Natural-language intent resolution is powered 100% on-device by Needle 3.
 - **Local Storage**: Command history and vector embeddings are stored locally under `~/Library/Application Support/NeedleBar/`.
 - **No Telemetry**: No user prompts, tool arguments, or file names are ever collected or transmitted.
+
+---
+
+## Product Ideas & Roadmap
+
+### 1. Natural-language workflows
+
+Let users chain multiple actions into a visible execution plan:
+
+> “Prepare my morning: open Slack, Safari, and Xcode; show my calendar; start a 25-minute timer.”
+
+NeedleBar could display:
+
+1. Open Slack
+2. Open Safari
+3. Open Xcode
+4. Show today’s calendar
+5. Start timer
+
+Allow users to confirm, edit, reorder, or skip individual steps.
+
+### 2. Context-aware commands
+
+Use the frontmost app and current system state to interpret short commands:
+
+- “Save this for later”
+- “Create a reminder from this”
+- “Open the project I was working on”
+- “Find the document I edited yesterday”
+- “Start a timer for this task”
+
+The `get_frontmost_application()` tool gives a strong foundation for app-specific behavior.
+
+### 3. App-specific actions
+
+Add integrations for popular macOS apps:
+
+- **Safari**: open tabs, search current page, save page URL
+- **Finder**: organize downloads, reveal selected files
+- **Terminal**: open a new shell in the current folder
+- **Xcode**: open a project or workspace
+- **Notes**: append text to a note
+- **Mail**: create a draft, but never send automatically
+- **Messages**: prepare a message for confirmation
+- **Music**: play, pause, or change playlists
+- **Slack/Discord**: open a channel or prepare a message
+
+A good rule: support navigation and preparation before irreversible actions.
+
+### 4. “Ask before doing” permissions
+
+Make safety more understandable with per-tool permissions:
+
+- Always allow
+- Ask every time
+- Ask once per session
+- Never allow
+
+Examples:
+
+- Opening apps: always allow
+- Moving files: ask every time
+- Creating reminders: ask once per session
+- Sending messages: always require confirmation
+- Running shell commands: disabled by default
+
+This can become one of NeedleBar’s strongest trust features.
+
+### 5. Dry-run mode
+
+Add a command like:
+
+> “What would you do if I asked you to clean up Downloads?”
+
+NeedleBar should produce a proposed execution plan without taking action. This is especially useful for file operations and future shell automation.
+
+### 6. Undo and action history
+
+For every mutating action, store enough information to reverse it:
+
+- File move → original path
+- File rename → previous name
+- Reminder creation → reminder identifier
+- Calendar event → event identifier
+
+Then support:
+
+> “Undo the last action.”
+> “Undo everything from five minutes ago.”
+
+This would substantially increase user confidence.
+
+### 7. Smart file organization
+
+A compelling local-first workflow:
+
+> “Find all screenshots from this week and move them into a folder called Screenshots.”
+
+Useful safeguards:
+
+- Preview matching files
+- Show exact source and destination paths
+- Never overwrite existing files
+- Require confirmation
+- Provide undo
+- Support rules like “only files on my Desktop”
+
+### 8. Personal command aliases
+
+Allow users to define shortcuts:
+
+- “Focus mode” → open work apps, close distractions, start timer
+- “End my day” → show unfinished reminders, close selected apps
+- “Release checklist” → open Terminal in project, open GitHub, open notes
+- “Research mode” → open browser tabs and note-taking app
+
+These could be stored as local workflow definitions and executed through the same validated tool system.
+
+### 9. Automation schedules
+
+Let users schedule local automations:
+
+- “Every weekday at 9 AM, open my work apps.”
+- “At 6 PM, remind me to review my tasks.”
+- “When my battery drops below 20%, enable Low Power Mode.”
+
+A visual schedule editor would make this approachable without requiring users to understand cron or Shortcuts.
+
+### 10. Clipboard intelligence
+
+Add local clipboard tools:
+
+- “Summarize the text I just copied.”
+- “Turn this into a reminder.”
+- “Extract the URLs from my clipboard.”
+- “Format this JSON.”
+- “Save this as a note.”
+
+For privacy, make clipboard access opt-in and show a visible indicator whenever NeedleBar reads it.
+
+---
+
+## Differentiating Product Ideas
+
+### 11. Local “memory,” but transparent
+
+Instead of opaque long-term memory, create a searchable local workspace:
+
+- Past commands
+- Frequently opened apps
+- Common folders
+- User-created workflows
+- Recent projects
+- Notes explicitly saved to NeedleBar
+
+Let users inspect, edit, export, and delete all stored memory.
+
+### 12. Command suggestions based on context
+
+When the popover opens, show useful suggestions such as:
+
+- “Open your active project”
+- “Show today’s calendar”
+- “Continue your last workflow”
+- “Find recent downloads”
+
+Suggestions should be generated from local state only and clearly labeled as suggestions.
+
+### 13. Project-aware modes
+
+Users could define project folders:
+
+> “Add `~/Projects/NeedleBar` as a project.”
+
+Then NeedleBar can understand:
+
+- “Open the project”
+- “Show files changed today”
+- “Open the README and test folder”
+- “Start a development session”
+
+You could later add Git-aware read-only tools such as status, recent commits, branches, and changed files.
+
+### 14. Focus sessions
+
+A polished workflow could combine several existing capabilities:
+
+> “Start a deep work session for 45 minutes.”
+
+NeedleBar could:
+
+- Open selected apps
+- Start a timer
+- Enable a Focus mode
+- Open the active project
+- Suppress distracting apps if configured
+- Restore the previous state afterward
+
+### 15. Visual execution timeline
+
+Instead of only showing a success message, show a compact timeline:
+
+```text
+✓ Opened Xcode
+✓ Opened Terminal
+⚠ Create reminder — waiting for confirmation
+○ Start 25-minute timer
+```
+
+This makes multi-step automation easier to understand and debug.
+
+---
+
+## Tool Additions Worth Prioritizing
+
+I’d consider adding these tools next:
+
+1. `open_terminal_at_path(path)`
+2. `get_clipboard_text()`
+3. `copy_to_clipboard(text)`
+4. `create_note(title, body)`
+5. `append_to_note(title, text)`
+6. `get_calendar_events(start, end)`
+7. `list_reminders(list, completed)`
+8. `create_workflow(name, steps)`
+9. `run_workflow(name)`
+10. `undo_last_action()`
+11. `get_selected_finder_item()`
+12. `get_active_browser_url()`
+13. `get_git_status(path)`
+14. `open_project(path)`
+15. `set_focus_mode(name)`
+
+---
+
+## Roadmap
+
+### Version 0.2 — Trust and polish
+
+- Better execution plans
+- Dry-run mode
+- Per-tool permissions
+- Undo for file operations
+- Improved error explanations
+- Command editing before execution
+- Recent command suggestions
+
+### Version 0.3 — Productivity
+
+- Clipboard tools
+- Calendar and reminder querying
+- Terminal-at-path
+- Notes integration
+- Project folders
+- Saved command aliases
+
+### Version 0.4 — Automation
+
+- Multi-step workflows
+- Scheduled automations
+- Focus sessions
+- Context-aware suggestions
+- Workflow import/export
+
+### Version 1.0 — The local macOS command layer
+
+- Reliable undo/rollback
+- Rich app integrations
+- Transparent local memory
+- Extensible tool/plugin system
+- Signed distribution and simple onboarding
+- Strong permission and audit UI
+
+---
+
+## Recommended Product Positioning
+
+The strongest positioning for NeedleBar is:
+
+> “Tell your Mac what to do. It plans locally, asks before risky actions, and never sends your data to the cloud.”
+
+The most valuable next combination would be:
+
+1. Multi-step plans
+2. Dry-run previews
+3. Undo
+4. Saved workflows
+5. Clipboard and project context
+
+That would make NeedleBar feel meaningfully different from a basic launcher, Siri shortcut, or cloud-based AI assistant.
